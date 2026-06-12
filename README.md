@@ -69,7 +69,7 @@ Essa abordagem acelera o ciclo de desenvolvimento de ferramentas pedagógicas, p
 
 O simulador foi desenhado sob o princípio da extrema replicabilidade. Ele não exige download de dependências, banco de dados ou compiladores.
 
-Baixe o arquivo sistema solar(1).html.
+Baixe o arquivo Sistema Solar.html.
 
 Dê um duplo clique no arquivo para executá-lo diretamente no navegador de sua preferência (Google Chrome, Mozilla Firefox, Microsoft Edge, etc.).
 

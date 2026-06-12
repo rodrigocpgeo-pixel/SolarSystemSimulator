@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Solar</title>
+    <style>
+        /* Estilos CSS gerais (sem alterações significativas) */
+        body {
+            display: flex;
+            align-items: center;
+            min-height: 100vh; /* Usa altura total da viewport */
+            max-height: 100vh; /* Evita overflow vertical no body */
+            background-color: #00001a;
+            margin: 0;
+            flex-direction: column;
+            color: white;
+            font-family: sans-serif;
+            overflow: hidden; /* Previne scroll no body */
+            position: relative;
+            /* Impede a seleção de texto */
+            user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+        }
+        h1 {
+            margin-top: 5px; /* Reduzido */
+            margin-bottom: 5px; /* Reduzido */
+            text-align: center;
+            font-size: 1.3em; /* Ligeiramente menor */
+            flex-shrink: 0; /* Impede que o título encolha */
+        }
+        #canvas-container {
+            width: 100%;
+            flex-grow: 1; /* Permite que o container cresça e ocupe espaço vertical */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* Garante que o canvas não ultrapasse */
+            padding: 5px;
+            box-sizing: border-box;
+            position: relative;
+        }
+        canvas#simulationCanvas {
+            border: 1px solid rgba(100, 100, 100, 0.5);
+            display: block;
+            /* Max-width/height garantem que não ultrapasse o container */
+            max-width: 100%;
+            max-height: 100%;
+            box-sizing: border-box;
+            background-color: #00001a; /* Fundo do canvas ainda definido aqui */
+            /* Cursor inicial é default, mudará com zoom ou diâmetro proporcional */
+            cursor: default;
+            aspect-ratio: 1 / 1; /* Mantém quadrado */
+        }
+        /* Classe para indicar que o pan (arrastar) está disponível */
+        canvas#simulationCanvas.pannable { cursor: grab; }
+        canvas#simulationCanvas.pannable:active { cursor: grabbing; }
+
+        .controls-container {
+            margin-top: 5px; /* Reduzido */
+            margin-bottom: 5px; /* Reduzido */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px; /* Reduzido */
+            width: 95%; /* Ligeiramente maior */
+            max-width: 1000px; /* Aumentado para caber mais controlos */
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 8px; /* Reduzido */
+            border-radius: 8px;
+            flex-shrink: 0; /* Impede que os controles encolham */
+        }
+        .controls-group {
+            display: flex;
+            gap: 8px; /* Reduzido */
+            flex-wrap: wrap; /* Permite que os controles quebrem linha */
+            justify-content: center;
+            align-items: center; /* Alinha itens verticalmente */
+            width: 100%;
+        }
+         .controls-group label {
+            display: flex;
+            align-items: center;
+            gap: 4px; /* Reduzido */
+            font-size: 0.85em; /* Reduzido */
+            color: #ccc;
+            white-space: nowrap; /* Evita quebra de linha no label */
+            padding: 2px 0; /* Pequeno padding vertical */
+        }
+         .controls-group input[type="range"] {
+            cursor: pointer;
+            flex-grow: 1; /* Permite que o slider cresça */
+            max-width: 120px; /* Reduzido */
+            height: 15px; /* Ajustar altura se necessário */
+        }
+         .controls-group input[type="checkbox"] {
+            cursor: pointer;
+            transform: scale(0.9); /* Deixa checkbox um pouco menor */
+        }
+        /* Estilo para os inputs numéricos */
+         .controls-group input[type="number"] {
+            width: 55px; /* Largura fixa */
+            padding: 3px 5px;
+            font-size: 0.85em;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background-color: #2a2a3a;
+            color: #eee;
+            text-align: right;
+            margin-left: 3px; /* Pequena margem */
+            -moz-appearance: textfield; /* Esconde setas no Firefox */
+        }
+        /* Esconde setas no Chrome, Safari, Edge */
+         .controls-group input[type=number]::-webkit-inner-spin-button,
+         .controls-group input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .controls-group button {
+            padding: 6px 10px; /* Reduzido */
+            font-size: 0.85em; /* Reduzido */
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+            color: #333;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .controls-group button:hover { background-color: #e0e0e0; }
+        #btnToggleAnimation { background-color: #ffdddd; border-color: #ffaaaa; } /* Estilo botão Pausar */
+        #btnToggleAnimation.paused { background-color: #ddffdd; border-color: #aaffaa; } /* Estilo botão Retomar */
+
+        /* Estilos do Tooltip (sem alterações) */
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            white-space: nowrap;
+            z-index: 10;
+            display: none; /* Começa oculto */
+            pointer-events: none; /* Não interfere com cliques */
+        }
+
+        /* Estilos da Info Box (sem alterações) */
+        .info-box {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 180px; /* Largura base */
+            max-width: 60%; /* Evita ficar muito largo */
+            background-color: rgba(40, 40, 60, 0.85);
+            color: #eee;
+            border: 1px solid rgba(150, 150, 180, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.4);
+            z-index: 20;
+            display: none; /* Começa oculto */
+            font-size: 0.85em;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 1em;
+            color: #fff;
+            border-bottom: 1px solid rgba(150, 150, 180, 0.5);
+            padding-bottom: 4px;
+        }
+        .info-box p { margin: 4px 0; line-height: 1.3; }
+         .info-box strong { color: #bbb; } /* Destaca o rótulo */
+        .info-box-close {
+            position: absolute;
+            top: 3px;
+            right: 6px;
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            line-height: 1;
+        }
+        .info-box-close:hover { color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1></h1>
+
+    <div id="canvas-container">
+        <canvas id="simulationCanvas"></canvas>
+        <div id="infoBox" class="info-box">
+            <button id="infoBoxClose" class="info-box-close">&times;</button>
+            <h3 id="infoBoxTitle"></h3>
+            <p><strong>Diâmetro:</strong> <span id="infoBoxDiameter"></span> km</p>
+            <p><strong id="infoBoxDistanceLabel">Distância Média:</strong> <span id="infoBoxDistance"></span> milhões km</p>
+            <p><strong>Período Orbital:</strong> <span id="infoBoxPeriod"></span> dias</p>
+            <p id="infoBoxSatellitesP" style="display: none;"><strong>Satélites:</strong> <span id="infoBoxSatellites"></span></p>
+        </div>
+    </div>
+
+    <div class="controls-container">
+        <div class="controls-group">
+            <button id="btnToggleAnimation">Pausar</button>
+             <label><input type="checkbox" id="showOrbitsCheck" checked> Mostrar Órbitas</label>
+             <label><input type="checkbox" id="showLabelsCheck" checked> Mostrar Nomes</label>
+             <label><input type="checkbox" id="showAsteroidsCheck" checked> Mostrar Asteroides</label>
+             <label><input type="checkbox" id="showMajorMoonsCheck" checked> Mostrar Luas Principais</label>
+             <label><input type="checkbox" id="useProportionalSpeedCheck"> Translação Proporcional</label>
+             <label><input type="checkbox" id="useProportionalDiameterCheck"> Diâmetro Proporcional</label>
+        </div>
+        <div class="controls-group">
+              <label for="generalSpeedSlider">Velocidade:</label>
+              <input type="range" id="generalSpeedSlider" min="0.1" max="10" step="0.1" value="1">
+              <input type="number" id="generalSpeedInput" min="0.1" max="10" step="0.1" value="1.0"> x
+
+              <label for="zoomSlider">Zoom:</label>
+              <input type="range" id="zoomSlider" min="0.1" max="20" step="0.1" value="1">
+              <input type="number" id="zoomInput" min="0.1" max="20" step="0.1" value="1.0"> x
+              </div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // --- Variáveis Globais ---
+        let canvas, ctx; // Elemento canvas e seu contexto 2D
+        let canvasContainer; // Div que contém o canvas
+        let centerX, centerY, baseSize; // Centro e tamanho base do canvas
+        let animationFrameId = null; // ID para controlar o loop de animação
+        let tooltipElement; // Elemento DOM para o tooltip
+        // Elementos DOM para a caixa de informações
+        let infoBoxElement, infoBoxTitle, infoBoxDiameter, infoBoxDistance, infoBoxDistanceLabel, infoBoxPeriod, infoBoxSatellitesP, infoBoxSatellites, infoBoxCloseButton;
+        let globalMouseX = 0; // Posição X global do mouse (viewport)
+        let globalMouseY = 0; // Posição Y global do mouse (viewport)
+
+        // --- Variáveis de Estado da Simulação ---
+        let isAnimationRunning = false; // A animação está rodando?
+        let showOrbits = true; // Mostrar órbitas dos planetas/luas?
+        let showLabels = true; // Mostrar nomes dos corpos celestes?
+        let showAsteroids = true; // Mostrar o cinturão de asteroides?
+        let showMajorMoons = true; // Mostrar as luas principais (INCLUI A DA TERRA AGORA)?
+        // Removido: let showRotationMarkers = true;
+        let useProportionalSpeed = false; // Usar velocidade orbital proporcional à real?
+        // Removido: let useProportionalRotation = false;
+        let useProportionalDiameter = false; // Usar diâmetro/espaçamento orbital proporcional ao real?
+        let zoomLevel = 1.0; // Nível de zoom atual
+        let isPanning = false; // O usuário está arrastando (pan)?
+        let panStartX = 0, panStartY = 0; // Posição inicial do arraste
+        let viewOffsetX = 0, viewOffsetY = 0; // Deslocamento atual da visualização (pan)
+        let startViewOffsetX = 0, startViewOffsetY = 0; // Deslocamento no início do arraste
+        let speedMultiplier = 1.0; // Multiplicador da velocidade geral da simulação
+        let mouseX = 0, mouseY = 0; // Posição do mouse relativa ao canvas
+
+        // --- Constantes da Simulação ---
+        const sunColor = 'orange'; // Cor do Sol
+        const orbitColor = 'rgba(255, 255, 255, 0.3)'; // Cor das órbitas dos planetas
+        const moonOrbitColor = 'rgba(180, 180, 180, 0.2)'; // Cor das órbitas das luas
+        const labelColor = 'rgba(255, 255, 255, 0.8)'; // Cor dos nomes
+        const labelFont = '10px sans-serif'; // Fonte dos nomes
+        const STAR_COUNT = 400; // Número de estrelas de fundo
+        const DARKEN_PERCENTAGE = 40; // Percentual para escurecer o lado sombreado dos corpos
+        // Constantes dos Asteroides
+        const ASTEROID_COUNT = 300; // Número de asteroides
+        const ASTEROID_BELT_INNER_RADIUS_VISUAL = 0.30; // Raio visual interno (relativo ao tamanho do canvas)
+        const ASTEROID_BELT_OUTER_RADIUS_VISUAL = 0.35; // Raio visual externo (relativo ao tamanho do canvas)
+        const ASTEROID_MIN_SPEED = -0.005; // Velocidade orbital mínima dos asteroides
+        const ASTEROID_MAX_SPEED = -0.009; // Velocidade orbital máxima dos asteroides
+        const ASTEROID_MIN_SIZE = 0.5; // Tamanho mínimo base do asteroide (pixels)
+        const ASTEROID_MAX_SIZE = 1.5; // Tamanho máximo base do asteroide (pixels)
+        const asteroidColor = 'rgba(160, 160, 160, 0.7)'; // Cor dos asteroides
+        // Outras Constantes
+        const MAJOR_MOON_MIN_ZOOM_LABEL = 2.5; // Zoom mínimo para mostrar nomes das luas principais
+        // Removido: const rotationMarkerColor = 'rgba(255, 0, 0, 0.7)';
+        const BASE_EARTH_VISUAL_SPEED = -0.010; // Velocidade visual base da Terra (referência)
+        const BASE_EARTH_PROPORTIONAL_SPEED = BASE_EARTH_VISUAL_SPEED; // Velocidade proporcional base da Terra
+        const BASE_EARTH_ROTATION_VISUAL_SPEED = -0.05; // Velocidade de rotação visual base da Terra
+        // Removido: const BASE_EARTH_ROTATION_PROPORTIONAL_SPEED = BASE_EARTH_ROTATION_VISUAL_SPEED;
+        const EARTH_DIAMETER_KM = 12756; // Diâmetro real da Terra (km) para cálculo proporcional
+        const BASE_PROPORTIONAL_RADIUS_FACTOR = 0.016; // Fator base para raio proporcional (ajuste visual)
+        const ORBIT_SPACING_MULTIPLIER = 2.5; // Multiplicador para espaçar órbitas no modo proporcional
+        const MIN_ZOOM = 0.1; // Nível mínimo de zoom
+        const MAX_ZOOM = 20.0; // Nível máximo de zoom
+        const ZOOM_SENSITIVITY = 0.001; // Sensibilidade do zoom (ajuste fino, não usado diretamente no wheel)
+        const KEYBOARD_PAN_STEP = 15; // Quantidade de pixels para mover com as setas do teclado
+
+        // --- Dados dos Corpos Celestes (Planetas e Sol) ---
+        // Array de objetos, cada um representando um corpo celeste principal
+        const celestialBodies = [
+             // Note: rotationSpeedProportional foi removido dos objetos
+             { name: "Sol", type: "star", radiusVisual: 0.08, color: sunColor, angle: 0, speedVisual: 0, speedProportional: 0, orbitRadius: 0, rotationAngle: 0, rotationSpeedVisual: -0.001, info: { diameter: 1392700, distance: 0, period: 'N/A', satellites: 'N/A' } },
+             { name: "Mercúrio", type: "planet", radiusVisual: 0.008, color: 'gray', angle: Math.random() * 2 * Math.PI, speedVisual: -0.020, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 0.24), orbitRadius: 0.10, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: -0.02, info: { diameter: 4879, distance: 57.9, period: 88, satellites: 0 } },
+             { name: "Vênus", type: "planet", radiusVisual: 0.01, color: 'khaki', angle: Math.random() * 2 * Math.PI, speedVisual: -0.012, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 0.62), orbitRadius: 0.15, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: 0.005, info: { diameter: 12104, distance: 108.2, period: 224.7, satellites: 0 } },
+             { name: "Terra", type: "planet", radiusVisual: 0.011, color: 'royalblue', angle: Math.random() * 2 * Math.PI, speedVisual: BASE_EARTH_VISUAL_SPEED, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED, orbitRadius: 0.20, hasMoon: true, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: BASE_EARTH_ROTATION_VISUAL_SPEED, info: { diameter: 12756, distance: 149.6, period: 365.25, satellites: 1 } },
+             { name: "Marte", type: "planet", radiusVisual: 0.007, color: 'red', angle: Math.random() * 2 * Math.PI, speedVisual: -0.008, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 1.88), orbitRadius: 0.27, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: -0.048, info: { diameter: 6787, distance: 227.9, period: 687, satellites: 2 } },
+             { name: "Júpiter", type: "planet", radiusVisual: 0.03, color: 'burlywood', angle: Math.random() * 2 * Math.PI, speedVisual: -0.004, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 11.86), orbitRadius: 0.37, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: -0.12, info: { diameter: 142984, distance: 778.5, period: 4333, satellites: 95 } },
+             { name: "Saturno", type: "planet", radiusVisual: 0.027, color: 'palegoldenrod', angle: Math.random() * 2 * Math.PI, speedVisual: -0.003, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 29.46), orbitRadius: 0.47, hasRing: true, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: -0.11, info: { diameter: 120536, distance: 1434.0, period: 10759, satellites: 146 } },
+             { name: "Urano", type: "planet", radiusVisual: 0.02, color: 'lightblue', angle: Math.random() * 2 * Math.PI, speedVisual: -0.002, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 84.01), orbitRadius: 0.57, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: 0.07, info: { diameter: 51118, distance: 2871.0, period: 30687, satellites: 27 } },
+             { name: "Netuno", type: "planet", radiusVisual: 0.019, color: 'darkblue', angle: Math.random() * 2 * Math.PI, speedVisual: -0.001, speedProportional: BASE_EARTH_PROPORTIONAL_SPEED * (1 / 164.8), orbitRadius: 0.65, rotationAngle: Math.random() * 2 * Math.PI, rotationSpeedVisual: -0.075, info: { diameter: 49528, distance: 4495.0, period: 60190, satellites: 16 } }
+        ];
+
+        // Calcula o raio proporcional para cada corpo baseado no diâmetro real (relativo à Terra)
+        celestialBodies.forEach(body => {
+             if (body.info && body.info.diameter) {
+                 // Usa o raio visual da Terra como fator base para a escala proporcional
+                 const earthVisualRadiusFactor = celestialBodies.find(p => p.name === "Terra").radiusVisual;
+                 body.radiusProportional = earthVisualRadiusFactor * (body.info.diameter / EARTH_DIAMETER_KM);
+             } else {
+                // Se não houver info de diâmetro (ex: Sol sem diâmetro definido), usa o visual
+                body.radiusProportional = body.radiusVisual;
+             }
+        });
+
+        // Fator de raio visual da Terra (usado para luas)
+        const earthVisualRadiusFactor = celestialBodies.find(p => p.name === "Terra").radiusVisual;
+
+        // Dados da Lua da Terra
+        const earthMoonData = { name: "Lua", parent: "Terra", radiusVisual: 0.004, radiusProportional: earthVisualRadiusFactor * (3475 / EARTH_DIAMETER_KM), orbitRadius: 0.02, color: 'lightgrey', darkColor: '#7f7f7f', angle: Math.random() * 2 * Math.PI, speed: -0.05, type: 'moon', info: { diameter: 3475, distance: 0.384, period: 27.3, satellites: 'N/A' } };
+
+        // Dados das Luas Principais (Júpiter e Saturno)
+        const majorMoons = [
+              { name: "Io", parent: "Júpiter", radiusVisual: 0.003, radiusProportional: earthVisualRadiusFactor * (3643 / EARTH_DIAMETER_KM), orbitRadius: 0.04, color: '#fffacd', darkColor: '#b8860b', angle: Math.random() * 2 * Math.PI, speed: -0.20, type: 'moon', info: { diameter: 3643, distance: 0.42, period: 1.77, satellites: 'N/A' } },
+              { name: "Europa", parent: "Júpiter", radiusVisual: 0.0025, radiusProportional: earthVisualRadiusFactor * (3122 / EARTH_DIAMETER_KM), orbitRadius: 0.06, color: '#f5f5dc', darkColor: '#a0522d', angle: Math.random() * 2 * Math.PI, speed: -0.16, type: 'moon', info: { diameter: 3122, distance: 0.67, period: 3.55, satellites: 'N/A' } },
+              { name: "Ganimedes", parent: "Júpiter", radiusVisual: 0.004, radiusProportional: earthVisualRadiusFactor * (5268 / EARTH_DIAMETER_KM), orbitRadius: 0.09, color: '#d2b48c', darkColor: '#5f4c3a', angle: Math.random() * 2 * Math.PI, speed: -0.12, type: 'moon', info: { diameter: 5268, distance: 1.07, period: 7.15, satellites: 'N/A' } },
+              { name: "Calisto", parent: "Júpiter", radiusVisual: 0.0038, radiusProportional: earthVisualRadiusFactor * (4821 / EARTH_DIAMETER_KM), orbitRadius: 0.15, color: '#8b4513', darkColor: '#3e1f0a', angle: Math.random() * 2 * Math.PI, speed: -0.08, type: 'moon', info: { diameter: 4821, distance: 1.88, period: 16.7, satellites: 'N/A' } },
+              { name: "Titã", parent: "Saturno", radiusVisual: 0.004, radiusProportional: earthVisualRadiusFactor * (5150 / EARTH_DIAMETER_KM), orbitRadius: 0.10, color: '#ffdab9', darkColor: '#b8860b', angle: Math.random() * 2 * Math.PI, speed: -0.10, type: 'moon', info: { diameter: 5150, distance: 1.22, period: 15.9, satellites: 'N/A' } }
+        ];
+
+        // --- Arrays para armazenar estrelas e asteroides ---
+        let stars = [];
+        let asteroids = [];
+
+        // --- Elementos DOM (referências obtidas no onload) ---
+        let btnToggleAnimation;
+        let generalSpeedSlider, generalSpeedInput, zoomSlider, zoomInput;
+        let showOrbitsCheck, showLabelsCheck, showAsteroidsCheck, showMajorMoonsCheck, useProportionalSpeedCheck, useProportionalDiameterCheck;
+        // Removido: showRotationMarkersCheck, useProportionalRotationCheck;
+
+        // --- Funções de Controle da Animação ---
+        function startAnimation() {
+            if (!isAnimationRunning) {
+                isAnimationRunning = true;
+                if (btnToggleAnimation) {
+                    btnToggleAnimation.textContent = 'Pausar';
+                    btnToggleAnimation.classList.remove('paused');
+                }
+                animate(); // Inicia o loop
+            }
+        }
+        function stopAnimation() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId); // Para o loop
+                animationFrameId = null;
+            }
+            isAnimationRunning = false;
+            if (btnToggleAnimation) {
+                btnToggleAnimation.textContent = 'Retomar';
+                btnToggleAnimation.classList.add('paused');
+            }
+        }
+        function toggleAnimation() {
+            if (isAnimationRunning) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+        }
+
+        // --- Funções de Geração e Desenho das Estrelas ---
+        function generateStars(canvasWidth, canvasHeight) {
+            stars = [];
+            // Gera estrelas DENTRO dos limites do canvas atual (coordenadas fixas no viewport)
+            for (let i = 0; i < STAR_COUNT; i++) {
+                stars.push({
+                    x: Math.random() * canvasWidth, // Coordenada X relativa ao canvas
+                    y: Math.random() * canvasHeight, // Coordenada Y relativa ao canvas
+                    radius: Math.random() * 1.4 + 0.2, // Raio aleatório
+                    alpha: Math.random() * 0.8 + 0.2 // Transparência aleatória
+                });
+            }
+        }
+
+        function drawStars() {
+            if (!ctx) return;
+            ctx.save();
+            // As estrelas são desenhadas em coordenadas fixas do viewport (não afetadas por pan/zoom do sistema solar)
+            stars.forEach(star => {
+                ctx.beginPath();
+                // Ajusta o tamanho aparente da estrela com base no zoom para manter visibilidade
+                // Evita que estrelas fiquem enormes com zoom out
+                const starDrawRadius = star.radius / Math.sqrt(Math.max(zoomLevel, 1));
+                ctx.arc(star.x, star.y, starDrawRadius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`; // Cor branca com transparência
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        // --- Funções de Geração e Desenho dos Asteroides ---
+        function generateAsteroids(size) {
+            asteroids = [];
+            // Encontra as órbitas de Marte e Júpiter para definir os limites do cinturão
+            const marsOrbit = celestialBodies.find(p => p.name === "Marte").orbitRadius;
+            const jupiterOrbit = celestialBodies.find(p => p.name === "Júpiter").orbitRadius;
+
+            // Define os raios do cinturão baseados no modo (visual ou proporcional)
+            let innerBeltRadiusFactor, outerBeltRadiusFactor;
+            if (useProportionalDiameter) {
+                // Interpola entre Marte e Júpiter com multiplicador de espaçamento
+                const marsScaledOrbit = marsOrbit * ORBIT_SPACING_MULTIPLIER;
+                const jupiterScaledOrbit = jupiterOrbit * ORBIT_SPACING_MULTIPLIER;
+                // Define o cinturão um pouco depois de Marte e um pouco antes de Júpiter
+                innerBeltRadiusFactor = marsScaledOrbit + (jupiterScaledOrbit - marsScaledOrbit) * 0.1;
+                outerBeltRadiusFactor = jupiterScaledOrbit - (jupiterScaledOrbit - marsScaledOrbit) * 0.1;
+            } else {
+                // Usa os raios visuais definidos nas constantes
+                innerBeltRadiusFactor = ASTEROID_BELT_INNER_RADIUS_VISUAL;
+                outerBeltRadiusFactor = ASTEROID_BELT_OUTER_RADIUS_VISUAL;
+            }
+
+            // Converte os fatores de raio em pixels
+            const innerRadiusPixels = innerBeltRadiusFactor * (size / 2);
+            const outerRadiusPixels = outerBeltRadiusFactor * (size / 2);
+            const beltWidthPixels = outerRadiusPixels - innerRadiusPixels;
+
+            // Gera cada asteroide
+            for (let i = 0; i < ASTEROID_COUNT; i++) {
+                const angle = Math.random() * 2 * Math.PI; // Ângulo orbital aleatório
+                // Raio orbital aleatório dentro do cinturão
+                const orbitRadius = innerRadiusPixels + Math.random() * beltWidthPixels;
+                // Velocidade orbital aleatória dentro dos limites definidos
+                const speed = ASTEROID_MIN_SPEED + Math.random() * (ASTEROID_MAX_SPEED - ASTEROID_MIN_SPEED);
+                // Tamanho aleatório do asteroide
+                const asteroidSize = ASTEROID_MIN_SIZE + Math.random() * (ASTEROID_MAX_SIZE - ASTEROID_MIN_SIZE);
+                asteroids.push({ angle, orbitRadius, speed, size: asteroidSize });
+            }
+        }
+
+        function drawAsteroids() {
+            if (!ctx || !showAsteroids) return; // Só desenha se a opção estiver marcada
+            ctx.save();
+            ctx.fillStyle = asteroidColor;
+            asteroids.forEach(asteroid => {
+                // Calcula a posição X, Y do asteroide baseado no ângulo e raio orbital
+                const x = centerX + asteroid.orbitRadius * Math.cos(asteroid.angle);
+                const y = centerY + asteroid.orbitRadius * Math.sin(asteroid.angle);
+                // Ajusta o tamanho do asteroide com base no zoom para manter visibilidade
+                const drawSize = asteroid.size / Math.sqrt(zoomLevel);
+                // Desenha um pequeno retângulo (ou círculo) para representar o asteroide
+                ctx.fillRect(x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+                // Alternativa: desenhar círculo
+                // ctx.beginPath();
+                // ctx.arc(x, y, drawSize / 2, 0, Math.PI * 2);
+                // ctx.fill();
+            });
+            ctx.restore();
+        }
+
+
+        // --- Função para configurar/reconfigurar o Canvas e Parâmetros ---
+        function setupCanvasAndParams() {
+            if (!canvasContainer || !canvas) return;
+
+            // Obtém o tamanho do container do canvas
+            const containerWidth = canvasContainer.clientWidth;
+            const containerHeight = canvasContainer.clientHeight;
+
+            // Define o tamanho base do canvas como o menor lado do container (para manter quadrado)
+            baseSize = Math.min(containerWidth, containerHeight);
+            baseSize = Math.max(150, baseSize); // Garante um tamanho mínimo
+
+            // Define a largura e altura do canvas
+            canvas.width = baseSize;
+            canvas.height = baseSize;
+
+            // Calcula o centro do canvas
+            centerX = canvas.width / 2;
+            centerY = canvas.height / 2;
+
+            // Gera (ou regenera) estrelas e asteroides com base no novo tamanho
+            generateStars(canvas.width, canvas.height);
+            generateAsteroids(baseSize);
+
+            // Se a animação não estiver rodando, redesenha a cena estática
+            if (!isAnimationRunning) {
+                drawScene();
+            }
+        }
+
+        // --- Funções de Desenho dos Elementos da Simulação ---
+
+        /**
+         * Desenha um círculo (planeta, sol, lua) com sombreamento opcional.
+         * @param {number} x - Coordenada X do centro.
+         * @param {number} y - Coordenada Y do centro.
+         * @param {number} radius - Raio do círculo em pixels.
+         * @param {string} color - Cor principal (lado iluminado).
+         * @param {string|null} darkColor - Cor do lado sombreado (ou null para sem sombreamento).
+         * @param {number|null} lightSourceX - Coordenada X da fonte de luz (para sombreamento).
+         * @param {number|null} lightSourceY - Coordenada Y da fonte de luz (para sombreamento).
+         * @param {string|null} shadowColor - Cor da sombra externa (ex: brilho do sol).
+         * @param {number} shadowBlur - Intensidade do desfoque da sombra externa.
+         * @param {number} rotationAngle - Ângulo de rotação atual (não mais usado para marcador).
+         * @param {string} bodyName - Nome do corpo celeste (usado para lógicas específicas).
+         */
+        function drawCircle(x, y, radius, color, darkColor = null, lightSourceX = null, lightSourceY = null, shadowColor = null, shadowBlur = 0, rotationAngle = 0, bodyName = '') { // rotationAngle e bodyName mantidos por compatibilidade, mas não usados para marcador
+            if (radius <= 0) return; // Não desenha se o raio for zero ou negativo
+            ctx.save(); // Salva o estado atual do contexto (transformações, estilos)
+            ctx.translate(x, y); // Move a origem para o centro do círculo
+
+            ctx.beginPath(); // Inicia o caminho para desenhar o círculo
+
+            // Aplica sombra externa (usado para o brilho do Sol)
+            if (shadowColor) {
+                ctx.shadowColor = shadowColor;
+                ctx.shadowBlur = shadowBlur;
+            }
+
+            let fillStyle = color; // Estilo de preenchimento padrão é a cor principal
+
+            // Aplica gradiente linear para simular sombreamento se darkColor e fonte de luz forem fornecidos
+            if (darkColor !== null && lightSourceX !== null && lightSourceY !== null) {
+                // Calcula o ângulo DA FONTE DE LUZ para o planeta
+                const lightAngle = Math.atan2(y - lightSourceY, x - lightSourceX);
+
+                // Pontos inicial e final do gradiente (ao longo do diâmetro na direção da luz)
+                const startX = -radius * Math.cos(lightAngle);
+                const startY = -radius * Math.sin(lightAngle);
+                const endX = radius * Math.cos(lightAngle);
+                const endY = radius * Math.sin(lightAngle);
+
+                try {
+                    const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+                    gradient.addColorStop(0, color);     // Lado oposto ao sol (início do gradiente)
+                    gradient.addColorStop(0.45, color);
+                    gradient.addColorStop(0.55, darkColor); // Lado voltado para o sol (fim do gradiente)
+                    gradient.addColorStop(1, darkColor);
+                    fillStyle = gradient; // Usa o gradiente como estilo de preenchimento
+                } catch (e) {
+                    console.warn("Erro ao criar gradiente:", e);
+                    fillStyle = color;
+                }
+            }
+
+            // Desenha o arco do círculo completo
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fillStyle = fillStyle; // Define o preenchimento (cor sólida ou gradiente)
+            ctx.fill(); // Preenche o círculo
+
+            // Remove a sombra para não afetar outros desenhos
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+
+            // --- REMOVIDO: Desenho do marcador de rotação ---
+            // if (showRotationMarkers && radius > 1 && (darkColor !== null || shadowColor !== null) && rotationAngle !== undefined) {
+            //    ... código do marcador removido ...
+            // }
+
+            ctx.restore(); // Restaura o estado do contexto anterior (após translação inicial)
+        }
+
+        /**
+         * Desenha la órbita de um planeta ou lua.
+         * @param {number} orbitCenterX - Coordenada X do centro da órbita.
+         * @param {number} orbitCenterY - Coordenada Y do centro da órbita.
+         * @param {number} radius - Raio da órbita.
+         * @param {boolean} isMoonOrbit - É uma órbita de lua? (Define a cor e verifica showMajorMoons).
+         */
+        function drawOrbit(orbitCenterX, orbitCenterY, radius, isMoonOrbit = false) {
+            // Não desenha se a opção estiver desmarcada ou raio for inválido
+            if (radius <= 0 || !showOrbits) return;
+            // Verifica showMajorMoons para QUALQUER órbita de lua
+            if (isMoonOrbit && !showMajorMoons) return;
+
+            ctx.save();
+            ctx.beginPath();
+            // Desenha o arco da órbita completa
+            ctx.arc(orbitCenterX, orbitCenterY, radius, 0, Math.PI * 2);
+            // Define a cor e a espessura da linha (ajustada pelo zoom)
+            ctx.strokeStyle = isMoonOrbit ? moonOrbitColor : orbitColor;
+            ctx.lineWidth = Math.max(0.5, 1 / zoomLevel); // Linha mais fina com zoom in
+            ctx.stroke(); // Desenha a linha da órbita
+            ctx.restore();
+        }
+
+        /**
+         * Desenha os anéis de Saturno.
+         * @param {number} x - Coordenada X do centro.
+         * @param {number} y - Coordenada Y do centro.
+         * @param {number} innerRadius - Raio interno do anel.
+         * @param {number} outerRadius - Raio externo do anel.
+         * @param {string} color - Cor dos anéis.
+         * @param {number} rotation - Rotação (inclinação) dos anéis.
+         */
+        function drawRing(x, y, innerRadius, outerRadius, color, rotation = 0) {
+            if (outerRadius <= 0) return;
+            ctx.save();
+            ctx.translate(x, y); // Move origem para o centro
+            ctx.rotate(rotation); // Aplica inclinação
+            ctx.beginPath();
+            // Desenha o arco externo no sentido horário
+            ctx.arc(0, 0, outerRadius, 0, Math.PI * 2, false);
+            // Desenha o arco interno no sentido anti-horário (para criar o "buraco")
+            ctx.arc(0, 0, innerRadius, 0, Math.PI * 2, true);
+            ctx.fillStyle = color; // Cor semi-transparente
+            ctx.fill(); // Preenche a área entre os arcos
+            ctx.restore();
+        }
+
+        /**
+         * Desenha o nome de um corpo celeste.
+         * @param {string} text - O nome a ser exibido.
+         * @param {number} x - Coordenada X da posição do corpo.
+         * @param {number} y - Coordenada Y da posição do corpo.
+         * @param {boolean} isMajorMoon - É uma lua principal (ou a da Terra)? (Afeta visibilidade e offset).
+         */
+        function drawLabel(text, x, y, isMajorMoon = false) {
+            // Não desenha se a opção estiver desmarcada
+            if (!showLabels) return;
+            // Verifica showMajorMoons para QUALQUER lua
+            // Não desenha nome de lua se a opção 'Mostrar Luas Principais' estiver desmarcada
+            // ou se for uma lua de outro planeta e o zoom for baixo
+            if (isMajorMoon && (!showMajorMoons || (text !== "Lua" && zoomLevel < MAJOR_MOON_MIN_ZOOM_LABEL))) return;
+
+
+            ctx.fillStyle = labelColor;
+            ctx.font = labelFont;
+            ctx.textAlign = 'center';
+            // Offset Y para posicionar o nome acima do corpo (ajustado pelo zoom)
+            const yOffset = (isMajorMoon ? 6 : 10) / Math.max(1, zoomLevel * 0.5);
+            ctx.fillText(text, x, y - yOffset); // Desenha o texto
+        }
+
+        // --- Função Principal de Desenho da Cena ---
+        function drawScene() {
+            if (!ctx) { console.error("Contexto do canvas não está disponível."); return; }
+
+            // 1. Limpa o canvas completamente
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Desenha as estrelas (fundo fixo)
+            drawStars();
+
+            // 3. Salva o estado do contexto ANTES de aplicar transformações de pan/zoom
+            ctx.save();
+
+            // 4. Aplica as transformações de Pan e Zoom
+            ctx.translate(viewOffsetX, viewOffsetY); // Aplica o deslocamento (pan)
+            ctx.translate(centerX, centerY); // Move a origem para o centro
+            ctx.scale(zoomLevel, zoomLevel); // Aplica o zoom
+            ctx.translate(-centerX, -centerY); // Move a origem de volta
+
+            // --- Desenho do Sistema Solar ---
+            const parentPositions = {};
+
+            // Desenha órbitas, planetas e o Sol
+            celestialBodies.forEach(body => {
+                const orbitRadiusFactor = useProportionalDiameter ? body.orbitRadius * ORBIT_SPACING_MULTIPLIER : body.orbitRadius;
+                const currentOrbitRadius = orbitRadiusFactor * (baseSize / 2);
+                const currentRadiusFactor = useProportionalDiameter ? body.radiusProportional : body.radiusVisual;
+                const currentRadius = currentRadiusFactor * (baseSize / 2);
+                const bodyX = centerX + currentOrbitRadius * Math.cos(body.angle);
+                const bodyY = centerY + currentOrbitRadius * Math.sin(body.angle);
+                parentPositions[body.name] = { x: bodyX, y: bodyY };
+
+                if (body.type === 'planet') {
+                    drawOrbit(centerX, centerY, currentOrbitRadius); // Órbita do planeta
+                }
+
+                let bodyDarkColor = null;
+                if (body.type === 'planet') {
+                    bodyDarkColor = darkenColor(body.color, DARKEN_PERCENTAGE);
+                }
+
+                // Passa o nome do corpo para drawCircle
+                drawCircle(bodyX, bodyY, currentRadius, body.color, bodyDarkColor, centerX, centerY,
+                           body.type === 'star' ? 'yellow' : null, body.type === 'star' ? 40 : 0, body.rotationAngle, body.name);
+
+                if (body.hasRing) {
+                    const ringInnerRadius = currentRadius * 1.2;
+                    const ringOuterRadius = currentRadius * 2.0;
+                    drawRing(bodyX, bodyY, ringInnerRadius, ringOuterRadius, 'rgba(180, 170, 140, 0.6)', -0.3);
+                }
+
+                if (zoomLevel > 0.3) {
+                    // Passa false para isMajorMoon para planetas e sol
+                    drawLabel(body.name, bodyX, bodyY - currentRadius * 1.1, false);
+                }
+            });
+
+            // Desenha a Lua da Terra (SE showMajorMoons estiver ativo)
+            const earthPos = parentPositions["Terra"];
+            const earth = celestialBodies.find(p => p.name === "Terra");
+            // Adiciona verificação showMajorMoons
+            if (showMajorMoons && earthPos && earth.hasMoon) {
+                const earthMoonOrbitRadiusFactor = useProportionalDiameter ? earthMoonData.orbitRadius * ORBIT_SPACING_MULTIPLIER : earthMoonData.orbitRadius;
+                const currentMoonOrbitRadius = earthMoonOrbitRadiusFactor * (baseSize / 2);
+                const currentMoonRadiusFactor = useProportionalDiameter ? earthMoonData.radiusProportional : earthMoonData.radiusVisual;
+                const currentMoonRadius = currentMoonRadiusFactor * (baseSize / 2);
+
+                const moonX = earthPos.x + currentMoonOrbitRadius * Math.cos(earthMoonData.angle);
+                const moonY = earthPos.y + currentMoonOrbitRadius * Math.sin(earthMoonData.angle);
+
+                // Passa true para isMoonOrbit em drawOrbit (já verifica showMajorMoons internamente)
+                drawOrbit(earthPos.x, earthPos.y, currentMoonOrbitRadius, true);
+                // Passa o nome da lua para drawCircle
+                drawCircle(moonX, moonY, currentMoonRadius, earthMoonData.color, earthMoonData.darkColor, centerX, centerY, null, 0, 0, earthMoonData.name); // Rotação da lua não simulada aqui
+
+                // Passa true para isMajorMoon em drawLabel (verifica showMajorMoons e zoom internamente)
+                if (zoomLevel > 1.5) { // Mantém a verificação de zoom específica para o label da Lua
+                   drawLabel(earthMoonData.name, moonX, moonY - currentMoonRadius * 1.1, true);
+                }
+            }
+
+            // Desenha as Luas Principais (Júpiter, Saturno) (SE showMajorMoons estiver ativo)
+            if (showMajorMoons) {
+                majorMoons.forEach(moon => {
+                    const parentPos = parentPositions[moon.parent];
+                    if (parentPos) {
+                        const parentBody = celestialBodies.find(p => p.name === moon.parent);
+                        const parentRadiusFactor = useProportionalDiameter ? parentBody.radiusProportional : parentBody.radiusVisual;
+                        const parentRadiusSim = parentRadiusFactor * (baseSize / 2);
+                        const moonOrbitRadiusFactor = useProportionalDiameter ? moon.orbitRadius * ORBIT_SPACING_MULTIPLIER : moon.orbitRadius;
+                        const moonOrbitRadiusSim = parentRadiusSim * moonOrbitRadiusFactor * 10;
+                        const moonRadiusFactor = useProportionalDiameter ? moon.radiusProportional : moon.radiusVisual;
+                        const moonRadiusSim = moonRadiusFactor * (baseSize / 2);
+                        const moonX = parentPos.x + moonOrbitRadiusSim * Math.cos(moon.angle);
+                        const moonY = parentPos.y + moonOrbitRadiusSim * Math.sin(moon.angle);
+
+                        // Passa true para isMoonOrbit em drawOrbit
+                        drawOrbit(parentPos.x, parentPos.y, moonOrbitRadiusSim, true);
+                        // Passa o nome da lua para drawCircle
+                        drawCircle(moonX, moonY, moonRadiusSim, moon.color, moon.darkColor, centerX, centerY, null, 0, 0, moon.name); // Rotação da lua não simulada aqui
+                        // Passa true para isMajorMoon em drawLabel
+                        drawLabel(moon.name, moonX, moonY - moonRadiusSim * 1.1, true);
+                    }
+                });
+            }
+
+             // Desenha os asteroides
+             drawAsteroids();
+
+            // 5. Restaura o estado do contexto (remove transformações de pan/zoom)
+            ctx.restore();
+        }
+
+        // --- Loop de Animação Principal ---
+        function animate() {
+            if (!isAnimationRunning) return; // Sai se a animação estiver pausada
+
+            // Atualiza ângulos de órbita e rotação dos corpos principais
+            celestialBodies.forEach(body => {
+                // Atualiza ângulo orbital
+                const currentSpeed = useProportionalSpeed ? body.speedProportional : body.speedVisual;
+                if (currentSpeed !== 0) {
+                    body.angle += currentSpeed * speedMultiplier * 0.1; // Aplica multiplicador de velocidade
+                    // Mantém o ângulo entre 0 e 2*PI
+                    if (body.angle < 0) body.angle += Math.PI * 2;
+                    else if (body.angle > Math.PI * 2) body.angle -= Math.PI * 2;
+                }
+                // Atualiza ângulo de rotação (usando sempre a velocidade visual agora)
+                const currentRotationSpeed = body.rotationSpeedVisual; // Removida lógica de rotação proporcional
+                if (currentRotationSpeed !== 0) {
+                    body.rotationAngle += currentRotationSpeed * speedMultiplier * 0.1;
+                    if (body.rotationAngle < 0) body.rotationAngle += Math.PI * 2;
+                    else if (body.rotationAngle > Math.PI * 2) body.rotationAngle -= Math.PI * 2;
+                }
+            });
+
+            // Atualiza ângulo orbital da Lua da Terra (mesmo se não estiver visível)
+            earthMoonData.angle += earthMoonData.speed * speedMultiplier * 0.1;
+            if (earthMoonData.angle < 0) earthMoonData.angle += Math.PI * 2;
+            else if (earthMoonData.angle > Math.PI * 2) earthMoonData.angle -= Math.PI * 2;
+
+            // Atualiza ângulo orbital das Luas Principais (mesmo se não estiverem visíveis)
+            majorMoons.forEach(moon => {
+                moon.angle += moon.speed * speedMultiplier * 0.1;
+                if (moon.angle < 0) moon.angle += Math.PI * 2;
+                else if (moon.angle > Math.PI * 2) moon.angle -= Math.PI * 2;
+            });
+
+             // Atualiza ângulo orbital dos Asteroides (mesmo se não estiverem visíveis)
+             asteroids.forEach(asteroid => {
+                  asteroid.angle += asteroid.speed * speedMultiplier * 0.1;
+                  if (asteroid.angle < 0) asteroid.angle += Math.PI * 2;
+                  else if (asteroid.angle > Math.PI * 2) asteroid.angle -= Math.PI * 2;
+             });
+
+            // Redesenha a cena com as novas posições
+            drawScene();
+
+            // Solicita o próximo quadro da animação
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        // --- Funções de Interação (Pan, Zoom, Tooltip, InfoBox) ---
+
+        // Evento: Mouse pressionado no canvas (início do pan)
+        function onMouseDownCanvas(event) {
+            // Permite pan apenas se zoom > 1 OU diâmetro proporcional ativo
+            if ((zoomLevel <= 1 && !useProportionalDiameter) || isPanning) return;
+            isPanning = true;
+            panStartX = event.clientX; // Posição X inicial do mouse
+            panStartY = event.clientY; // Posição Y inicial do mouse
+            startViewOffsetX = viewOffsetX; // Salva o offset X atual
+            startViewOffsetY = viewOffsetY; // Salva o offset Y atual
+            canvas.style.cursor = 'grabbing'; // Muda o cursor para indicar arraste
+            hideTooltip(); // Esconde tooltip durante o pan
+            hideInfoBox(); // Esconde info box durante o pan
+        }
+
+        // Evento: Mouse liberado (fim do pan)
+        function onMouseUpCanvas() {
+            if (!isPanning) return;
+            isPanning = false;
+            updateCanvasCursor(); // Restaura o cursor apropriado (grab ou default)
+        }
+
+        // Evento: Mouse sai da área do canvas
+        function onMouseLeaveCanvas() {
+            if (isPanning) { // Se estava arrastando, finaliza o pan
+                onMouseUpCanvas();
+            }
+            hideTooltip(); // Esconde tooltip
+            mouseX = -1; mouseY = -1; // Indica que o mouse está fora do canvas
+        }
+
+        // Converte coordenadas do canvas (viewport) para coordenadas do "mundo" (sistema solar)
+        function getWorldCoordinates(canvasX, canvasY) {
+            // Ajusta pelas transformações inversas: primeiro translada pelo offset, depois escala pelo zoom
+            const mouseAdjustedX = canvasX - viewOffsetX;
+            const mouseAdjustedY = canvasY - viewOffsetY;
+            // Converte para coordenadas relativas ao centro (0,0) do mundo e aplica zoom inverso
+            const worldX = centerX + (mouseAdjustedX - centerX) / zoomLevel;
+            const worldY = centerY + (mouseAdjustedY - centerY) / zoomLevel;
+            return { worldX, worldY };
+        }
+
+        // Evento: Roda do mouse sobre o canvas (zoom)
+        function handleWheelZoom(event) {
+            event.preventDefault(); // Previne o scroll da página
+            hideInfoBox(); // Esconde info box ao dar zoom
+
+            // Coordenadas do mouse relativas ao canvas
+            const rect = canvas.getBoundingClientRect();
+            const mouseXCanvas = event.clientX - rect.left;
+            const mouseYCanvas = event.clientY - rect.top;
+
+            // Converte a posição do mouse para coordenadas do mundo ANTES do zoom
+            const worldCoordsBefore = getWorldCoordinates(mouseXCanvas, mouseYCanvas);
+
+            // Calcula o fator de zoom baseado na direção da roda
+            const delta = Math.sign(event.deltaY); // -1 para cima (zoom in), 1 para baixo (zoom out)
+            const zoomFactor = 1 - delta * 0.1; // Ajuste a sensibilidade aqui (0.1 = 10% por scroll)
+
+            // Calcula o novo nível de zoom e limita aos valores MIN e MAX
+            const previousZoom = zoomLevel;
+            let newZoomLevel = zoomLevel * zoomFactor;
+            newZoomLevel = Math.max(MIN_ZOOM, Math.min(newZoomLevel, MAX_ZOOM));
+
+            // --- Zoom Centrado no Mouse ---
+            // Calcula o novo offset para que o ponto do mundo sob o mouse permaneça sob o mouse
+            viewOffsetX = mouseXCanvas - centerX - (worldCoordsBefore.worldX - centerX) * newZoomLevel;
+            viewOffsetY = mouseYCanvas - centerY - (worldCoordsBefore.worldY - centerY) * newZoomLevel;
+
+            // --- Limites de Pan (após calcular o offset do zoom) ---
+            const orbitMultiplier = useProportionalDiameter ? ORBIT_SPACING_MULTIPLIER : 1;
+            const neptuneOrbitRadius = celestialBodies.find(p=>p.name === "Netuno").orbitRadius;
+            const maxRadiusPixels = neptuneOrbitRadius * orbitMultiplier * (baseSize / 2);
+            const maxOffset = Math.max(0, maxRadiusPixels * newZoomLevel - (baseSize / 2));
+
+            // Limita o offset calculado aos limites
+            viewOffsetX = Math.max(-maxOffset, Math.min(maxOffset, viewOffsetX));
+            viewOffsetY = Math.max(-maxOffset, Math.min(maxOffset, viewOffsetY));
+            // --- Fim dos Limites de Pan ---
+
+            // Atualiza o nível de zoom global e os controles deslizantes/numéricos
+            zoomLevel = newZoomLevel;
+            if(zoomSlider) zoomSlider.value = zoomLevel;
+            if(zoomInput) zoomInput.value = zoomLevel.toFixed(1);
+
+            // Reseta o pan se o zoom voltar a 1 ou menos (e não estiver em modo proporcional)
+            if (zoomLevel <= 1 && !useProportionalDiameter && previousZoom > 1) {
+                 viewOffsetX = 0;
+                 viewOffsetY = 0;
+            }
+
+            updateCanvasCursor(); // Atualiza o cursor (pode habilitar/desabilitar pan)
+
+            // Redesenha a cena se a animação estiver pausada
+            if (!isAnimationRunning) {
+                drawScene();
+            }
+        }
+
+        // Evento: Tecla pressionada (pan com setas)
+        function handleKeyboardPan(event) {
+            let dx = 0;
+            let dy = 0;
+            // Define o deslocamento baseado na tecla pressionada
+            switch (event.key) {
+                case "ArrowUp": dy = KEYBOARD_PAN_STEP; break;
+                case "ArrowDown": dy = -KEYBOARD_PAN_STEP; break;
+                case "ArrowLeft": dx = KEYBOARD_PAN_STEP; break;
+                case "ArrowRight": dx = -KEYBOARD_PAN_STEP; break;
+                default: return; // Ignora outras teclas
+            }
+            event.preventDefault(); // Previne o scroll da página com as setas
+
+            // Calcula os limites de pan (igual ao zoom)
+            const orbitMultiplier = useProportionalDiameter ? ORBIT_SPACING_MULTIPLIER : 1;
+            const neptuneOrbitRadius = celestialBodies.find(p=>p.name === "Netuno").orbitRadius;
+            const maxRadiusPixels = neptuneOrbitRadius * orbitMultiplier * (baseSize / 2);
+            const maxOffset = Math.max(0, maxRadiusPixels * zoomLevel - (baseSize / 2)); // Usa zoomLevel atual
+
+            // Aplica o deslocamento e limita aos limites
+            viewOffsetX = Math.max(-maxOffset, Math.min(maxOffset, viewOffsetX + dx));
+            viewOffsetY = Math.max(-maxOffset, Math.min(maxOffset, viewOffsetY + dy));
+
+            // Redesenha se a animação estiver pausada
+            if (!isAnimationRunning) { drawScene(); }
+        }
+
+        // Atualiza o cursor do canvas (grab/grabbing/default)
+        function updateCanvasCursor() {
+             if (isPanning) { // Se está arrastando, cursor é 'grabbing'
+                 canvas.style.cursor = 'grabbing';
+                 canvas.classList.add('pannable'); // Mantém a classe pannable
+             } else if (zoomLevel > 1 || useProportionalDiameter) { // Se pode arrastar
+                 canvas.style.cursor = 'grab';
+                 canvas.classList.add('pannable');
+             } else { // Se não pode arrastar
+                 canvas.style.cursor = 'default';
+                 canvas.classList.remove('pannable');
+             }
+        }
+
+
+        // --- Funções do Tooltip ---
+        function updateTooltip() {
+             // Não mostra tooltip se: elemento não existe, labels desativados, mouse fora, ou durante pan
+             if (!tooltipElement || !showLabels || mouseX < 0 || mouseY < 0 || isPanning) {
+                 hideTooltip();
+                 return;
+             }
+             // Converte posição do mouse para coordenadas do mundo
+             const { worldX, worldY } = getWorldCoordinates(mouseX, mouseY);
+             // Encontra o corpo celeste sob o mouse
+             let foundBody = findBodyAt(worldX, worldY); // findBodyAt já considera showMajorMoons
+
+             // Mostra tooltip se encontrou um corpo E a info box não está visível para ele
+             if (foundBody && infoBoxElement.style.display === 'none') {
+                 // A verificação de zoom para luas de outros planetas já está em drawLabel e findBodyAt
+                 showTooltip(foundBody.name, globalMouseX + 10, globalMouseY + 10);
+             } else {
+                 hideTooltip(); // Esconde se não encontrou corpo ou info box está ativa
+             }
+        }
+        function showTooltip(text, x, y) {
+            if (!tooltipElement) return;
+            tooltipElement.textContent = text;
+            // Ajusta posição para não sair da tela
+            const tooltipWidth = tooltipElement.offsetWidth;
+            const tooltipHeight = tooltipElement.offsetHeight;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            let finalX = x;
+            let finalY = y;
+            if (x + tooltipWidth > viewportWidth - 10) { finalX = x - tooltipWidth - 10; } // Move para esquerda
+            if (y + tooltipHeight > viewportHeight - 10) { finalY = y - tooltipHeight - 10; } // Move para cima
+            if (finalX < 10) finalX = 10; // Limite esquerdo
+            if (finalY < 10) finalY = 10; // Limite superior
+            tooltipElement.style.left = `${finalX}px`;
+            tooltipElement.style.top = `${finalY}px`;
+            tooltipElement.style.display = 'block'; // Torna visível
+        }
+        function hideTooltip() {
+            if (tooltipElement) { tooltipElement.style.display = 'none'; } // Oculta
+        }
+
+        // --- Funções da Info Box ---
+        function showInfoBox(body) {
+             if (!infoBoxElement || !body || !body.info) return; // Verifica se tudo existe
+             hideTooltip(); // Esconde tooltip ao abrir info box
+             // Preenche os campos da info box com os dados do corpo
+             infoBoxTitle.textContent = body.name;
+             infoBoxDiameter.textContent = body.info.diameter.toLocaleString('pt-BR'); // Formata número
+             infoBoxDistance.textContent = body.info.distance.toLocaleString('pt-BR');
+             infoBoxPeriod.textContent = body.info.period.toLocaleString('pt-BR');
+             // Mostra/esconde campo de satélites
+             if (body.info.satellites !== undefined && body.info.satellites !== 'N/A') {
+                 infoBoxSatellites.textContent = body.info.satellites.toLocaleString('pt-BR');
+                 infoBoxSatellitesP.style.display = 'block';
+             } else {
+                 infoBoxSatellitesP.style.display = 'none';
+             }
+             // Ajusta o label da distância para luas
+             if (body.type === 'moon') {
+                 infoBoxDistanceLabel.textContent = `Distância (${body.parent}):`; // Mostra o pai
+             } else {
+                 infoBoxDistanceLabel.textContent = "Distância Média:";
+             }
+             infoBoxElement.style.display = 'block'; // Torna a caixa visível
+        }
+        function hideInfoBox() {
+            if (infoBoxElement) { infoBoxElement.style.display = 'none'; } // Oculta
+        }
+
+        // --- Funções Auxiliares ---
+
+        /**
+         * Escurece uma cor hexadecimal ou nomeada por um percentual.
+         * @param {string} color - Cor em formato hex (#RRGGBB) ou nome CSS.
+         * @param {number} percent - Percentual para escurecer (0-100).
+         * @returns {string} - Nova cor em formato hex.
+         */
+        function darkenColor(color, percent) {
+             let R = 0, G = 0, B = 0;
+             // Converte cor para RGB
+             if (color.startsWith('#')) { // Hex
+                 R = parseInt(color.substring(1, 3), 16);
+                 G = parseInt(color.substring(3, 5), 16);
+                 B = parseInt(color.substring(5, 7), 16);
+             } else { // Nomeada (mapeia para hex)
+                 const namedColors = { gray: '#808080', khaki: '#F0E68C', royalblue: '#4169E1', red: '#FF0000', burlywood: '#DEB887', palegoldenrod: '#EEE8AA', lightblue: '#ADD8E6', darkblue: '#00008B', lightgrey: '#D3D3D3', '#fffacd': '#fffacd', '#f5f5dc': '#f5f5dc', '#d2b48c': '#d2b48c', '#8b4513': '#8b4513', '#ffdab9': '#ffdab9'};
+                 const hex = namedColors[color.toLowerCase()];
+                 if (hex) {
+                     R = parseInt(hex.substring(1, 3), 16);
+                     G = parseInt(hex.substring(3, 5), 16);
+                     B = parseInt(hex.substring(5, 7), 16);
+                 } else { return '#202020'; } // Cor padrão escura se não encontrar
+             }
+             // Aplica o percentual de escurecimento
+             R = parseInt(R * (100 - percent) / 100);
+             G = parseInt(G * (100 - percent) / 100);
+             B = parseInt(B * (100 - percent) / 100);
+             // Garante que os valores fiquem entre 0 e 255
+             R = Math.max(0, R); G = Math.max(0, G); B = Math.max(0, B);
+             // Converte de volta para Hex
+             const RR = R.toString(16).padStart(2, '0');
+             const GG = G.toString(16).padStart(2, '0');
+             const BB = B.toString(16).padStart(2, '0');
+             return "#" + RR + GG + BB;
+        }
+
+
+        /**
+         * Encontra o corpo celeste (planeta ou lua) nas coordenadas do mundo fornecidas.
+         * Prioriza luas sobre planetas se houver sobreposição.
+         * Respeita a flag showMajorMoons para todas as luas.
+         * @param {number} worldX - Coordenada X no mundo.
+         * @param {number} worldY - Coordenada Y no mundo.
+         * @returns {object|null} - O objeto do corpo encontrado ou null.
+         */
+        function findBodyAt(worldX, worldY) {
+             let foundBody = null;
+             let minDistanceSq = Infinity; // Usado para pegar o corpo mais próximo em caso de sobreposição
+             const parentPositions = {}; // Recalcula posições dos pais para precisão
+
+             // Calcula posições atuais dos planetas (necessário para luas)
+             celestialBodies.forEach(body => {
+                 if(body.type === 'planet') {
+                     const orbitRadiusFactor = useProportionalDiameter ? body.orbitRadius * ORBIT_SPACING_MULTIPLIER : body.orbitRadius;
+                     const currentOrbitRadius = orbitRadiusFactor * (baseSize / 2);
+                     const bodyX = centerX + currentOrbitRadius * Math.cos(body.angle);
+                     const bodyY = centerY + currentOrbitRadius * Math.sin(body.angle);
+                     parentPositions[body.name] = { x: bodyX, y: bodyY };
+                 } else if (body.type === 'star') {
+                    parentPositions[body.name] = { x: centerX, y: centerY }; // Sol está no centro
+                 }
+             });
+
+             // Função interna para verificar colisão com um corpo
+             const checkBody = (body, bodyX, bodyY, currentRadiusFactor) => {
+                 // Usa o raio correto (visual ou proporcional) para hitbox
+                 const currentRadius = currentRadiusFactor * (baseSize / 2);
+                 // Calcula distância quadrada do ponto ao centro do corpo
+                 const dx = worldX - bodyX;
+                 const dy = worldY - bodyY;
+                 const distSq = dx * dx + dy * dy;
+                 // Define um raio mínimo de clique (hitbox) para corpos pequenos, ajustado pelo zoom
+                 const hitRadius = Math.max(currentRadius, 7 / zoomLevel);
+                 const radiusSq = hitRadius * hitRadius; // Compara distâncias quadradas (mais eficiente)
+
+                 // Se o clique está dentro do raio de hitbox E é o mais próximo até agora
+                 if (distSq < radiusSq && distSq < minDistanceSq) {
+                     minDistanceSq = distSq; // Atualiza a menor distância
+                     return true; // Indica que este corpo foi atingido
+                 }
+                 return false;
+             };
+
+             // Verifica showMajorMoons ANTES de checar luas
+             if (showMajorMoons) {
+                 // 1. Verifica Luas Principais primeiro
+                 majorMoons.forEach(moon => {
+                     const parentPos = parentPositions[moon.parent];
+                     if (parentPos) {
+                         const parentBody = celestialBodies.find(p => p.name === moon.parent);
+                         const parentRadiusFactor = useProportionalDiameter ? parentBody.radiusProportional : parentBody.radiusVisual;
+                         const parentRadiusSim = parentRadiusFactor * (baseSize / 2);
+                         const moonOrbitRadiusFactor = useProportionalDiameter ? moon.orbitRadius * ORBIT_SPACING_MULTIPLIER : moon.orbitRadius;
+                         const moonOrbitRadiusSim = parentRadiusSim * moonOrbitRadiusFactor * 10;
+                         const moonRadiusFactor = useProportionalDiameter ? moon.radiusProportional : moon.radiusVisual;
+                         const moonX = parentPos.x + moonOrbitRadiusSim * Math.cos(moon.angle);
+                         const moonY = parentPos.y + moonOrbitRadiusSim * Math.sin(moon.angle);
+                         if (checkBody(moon, moonX, moonY, moonRadiusFactor)) {
+                             foundBody = moon;
+                         }
+                     }
+                 });
+
+                 // 2. Verifica Lua da Terra
+                 const earthPos = parentPositions["Terra"];
+                 const earth = celestialBodies.find(p => p.name === "Terra");
+                 if (earthPos && earth.hasMoon) {
+                     const earthMoonOrbitRadiusFactor = useProportionalDiameter ? earthMoonData.orbitRadius * ORBIT_SPACING_MULTIPLIER : earthMoonData.orbitRadius;
+                     const currentMoonOrbitRadius = earthMoonOrbitRadiusFactor * (baseSize / 2);
+                     const currentMoonRadiusFactor = useProportionalDiameter ? earthMoonData.radiusProportional : earthMoonData.radiusVisual;
+                     const moonX = earthPos.x + currentMoonOrbitRadius * Math.cos(earthMoonData.angle);
+                     const moonY = earthPos.y + currentMoonOrbitRadius * Math.sin(earthMoonData.angle);
+                     if (checkBody(earthMoonData, moonX, moonY, currentMoonRadiusFactor)) {
+                         foundBody = earthMoonData;
+                     }
+                 }
+             } // Fim do if (showMajorMoons)
+
+             // 3. Verifica Planetas e Sol (INDEPENDENTE de showMajorMoons)
+             celestialBodies.forEach(body => {
+                 const orbitRadiusFactor = useProportionalDiameter ? body.orbitRadius * ORBIT_SPACING_MULTIPLIER : body.orbitRadius;
+                 const currentOrbitRadius = orbitRadiusFactor * (baseSize / 2);
+                 const currentRadiusFactor = useProportionalDiameter ? body.radiusProportional : body.radiusVisual;
+                 const bodyX = centerX + currentOrbitRadius * Math.cos(body.angle);
+                 const bodyY = centerY + currentOrbitRadius * Math.sin(body.angle);
+                 if (checkBody(body, bodyX, bodyY, currentRadiusFactor)) {
+                     foundBody = body; // Substitui lua se planeta estiver mais próximo do clique
+                 }
+             });
+
+             return foundBody; // Retorna o corpo encontrado (pode ser null, planeta, sol ou lua se showMajorMoons=true)
+        }
+
+        // Evento: Clique no canvas
+        function handleCanvasClick(event) {
+            if (isPanning) return; // Ignora clique se estava arrastando
+            // Obtém coordenadas do clique relativas ao canvas
+            const rect = canvas.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+            // Converte para coordenadas do mundo
+            const { worldX, worldY } = getWorldCoordinates(clickX, clickY);
+            // Encontra o corpo clicado (já respeita showMajorMoons)
+            const clickedBody = findBodyAt(worldX, worldY);
+
+            if (clickedBody) {
+                showInfoBox(clickedBody); // Mostra info box se clicou em um corpo
+            } else {
+                hideInfoBox(); // Esconde info box se clicou no espaço vazio
+            }
+        }
+
+        // --- Inicialização da Simulação ---
+        window.onload = function() {
+            // --- Obter referências aos elementos DOM ---
+            canvasContainer = document.getElementById('canvas-container');
+            canvas = document.getElementById('simulationCanvas');
+            tooltipElement = document.getElementById('tooltip');
+            // Info Box
+            infoBoxElement = document.getElementById('infoBox');
+            infoBoxTitle = document.getElementById('infoBoxTitle');
+            infoBoxDiameter = document.getElementById('infoBoxDiameter');
+            infoBoxDistance = document.getElementById('infoBoxDistance');
+            infoBoxDistanceLabel = document.getElementById('infoBoxDistanceLabel');
+            infoBoxPeriod = document.getElementById('infoBoxPeriod');
+            infoBoxSatellitesP = document.getElementById('infoBoxSatellitesP');
+            infoBoxSatellites = document.getElementById('infoBoxSatellites');
+            infoBoxCloseButton = document.getElementById('infoBoxClose');
+            // Controles
+            btnToggleAnimation = document.getElementById('btnToggleAnimation');
+            generalSpeedSlider = document.getElementById('generalSpeedSlider');
+            generalSpeedInput = document.getElementById('generalSpeedInput');
+            zoomSlider = document.getElementById('zoomSlider');
+            zoomInput = document.getElementById('zoomInput');
+            showOrbitsCheck = document.getElementById('showOrbitsCheck');
+            showLabelsCheck = document.getElementById('showLabelsCheck');
+            showAsteroidsCheck = document.getElementById('showAsteroidsCheck'); // Referência ao novo checkbox
+            showMajorMoonsCheck = document.getElementById('showMajorMoonsCheck');
+            // Removido: showRotationMarkersCheck = document.getElementById('showRotationMarkersCheck');
+            useProportionalSpeedCheck = document.getElementById('useProportionalSpeedCheck');
+            // Removido: useProportionalRotationCheck = document.getElementById('useProportionalRotationCheck');
+            useProportionalDiameterCheck = document.getElementById('useProportionalDiameterCheck');
+
+            // Verifica se todos os elementos essenciais foram encontrados
+            // Atualiza a verificação para remover os elementos que foram retirados
+            if (!canvasContainer || !canvas || !tooltipElement || !infoBoxElement || !infoBoxCloseButton || !btnToggleAnimation || !generalSpeedSlider || !generalSpeedInput || !zoomSlider || !zoomInput || !showOrbitsCheck || !showLabelsCheck || !showAsteroidsCheck || !showMajorMoonsCheck || !infoBoxDistanceLabel || !infoBoxSatellitesP || !infoBoxSatellites || !useProportionalSpeedCheck || !useProportionalDiameterCheck) {
+                console.error("Elementos essenciais não encontrados no DOM!");
+                return; // Aborta a inicialização se algo faltar
+            }
+
+            // Obtém o contexto 2D do canvas
+            ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error("Não foi possível obter o contexto 2D do canvas.");
+                return; // Aborta se não conseguir o contexto
+            }
+
+            // Pré-calcula as cores escuras para luas
+            earthMoonData.darkColor = darkenColor(earthMoonData.color, DARKEN_PERCENTAGE);
+            majorMoons.forEach(moon => { moon.darkColor = darkenColor(moon.color, DARKEN_PERCENTAGE); });
+
+            // --- Adicionar Listeners de Eventos ---
+
+            // Controles Checkbox e Botão
+            btnToggleAnimation.addEventListener('click', toggleAnimation);
+            showOrbitsCheck.addEventListener('change', (e) => { showOrbits = e.target.checked; if (!isAnimationRunning) drawScene(); });
+            showLabelsCheck.addEventListener('change', (e) => { showLabels = e.target.checked; if (!isAnimationRunning) drawScene(); if (!showLabels) hideTooltip(); });
+            showAsteroidsCheck.addEventListener('change', (e) => { showAsteroids = e.target.checked; if (!isAnimationRunning) drawScene(); }); // Listener para asteroides
+            showMajorMoonsCheck.addEventListener('change', (e) => { showMajorMoons = e.target.checked; if (!isAnimationRunning) drawScene(); }); // Listener para luas
+            // Removido: showRotationMarkersCheck.addEventListener(...);
+            useProportionalSpeedCheck.addEventListener('change', (e) => { useProportionalSpeed = e.target.checked; });
+            // Removido: useProportionalRotationCheck.addEventListener(...);
+            useProportionalDiameterCheck.addEventListener('change', (e) => {
+                useProportionalDiameter = e.target.checked;
+                generateAsteroids(baseSize); // Regenera asteroides com base no novo modo
+                updateCanvasCursor(); // Atualiza cursor (pode habilitar/desabilitar pan)
+                // Reseta pan/zoom se voltar ao modo visual e zoom <= 1
+                if (!useProportionalDiameter && zoomLevel <= 1) { viewOffsetX = 0; viewOffsetY = 0; }
+                if (!isAnimationRunning) drawScene();
+            });
+
+            // Controles Slider e Input Numérico (Velocidade)
+            generalSpeedSlider.addEventListener('input', (e) => {
+                speedMultiplier = parseFloat(e.target.value);
+                generalSpeedInput.value = speedMultiplier.toFixed(1); // Atualiza input numérico
+            });
+            generalSpeedInput.addEventListener('change', (e) => { // 'change' para validar ao perder foco ou Enter
+                let val = parseFloat(e.target.value);
+                const min = parseFloat(generalSpeedSlider.min);
+                const max = parseFloat(generalSpeedSlider.max);
+                if (isNaN(val)) val = 1.0; // Valor padrão se inválido
+                val = Math.max(min, Math.min(val, max)); // Limita ao min/max do slider
+                speedMultiplier = val;
+                e.target.value = speedMultiplier.toFixed(1); // Corrige valor no input
+                generalSpeedSlider.value = speedMultiplier; // Atualiza slider
+            });
+
+            // Controles Slider e Input Numérico (Zoom)
+            zoomSlider.addEventListener('input', (e) => {
+                const previousZoom = zoomLevel;
+                zoomLevel = parseFloat(e.target.value);
+                zoomInput.value = zoomLevel.toFixed(1);
+                // Reseta pan se zoom <= 1 (e não proporcional)
+                 if (zoomLevel <= 1 && previousZoom > 1 && !useProportionalDiameter) {
+                     viewOffsetX = 0; viewOffsetY = 0;
+                 }
+                updateCanvasCursor();
+                if (!isAnimationRunning) drawScene();
+                hideInfoBox(); // Esconde info box ao mudar zoom pelo slider
+            });
+             zoomInput.addEventListener('change', (e) => {
+                 let val = parseFloat(e.target.value);
+                 const min = parseFloat(zoomSlider.min);
+                 const max = parseFloat(zoomSlider.max);
+                 if (isNaN(val)) val = 1.0;
+                 val = Math.max(min, Math.min(val, max));
+                 const previousZoom = zoomLevel;
+                 zoomLevel = val;
+                 e.target.value = zoomLevel.toFixed(1);
+                 zoomSlider.value = zoomLevel;
+                 if (zoomLevel <= 1 && previousZoom > 1 && !useProportionalDiameter) {
+                     viewOffsetX = 0; viewOffsetY = 0;
+                 }
+                 updateCanvasCursor();
+                 if (!isAnimationRunning) drawScene();
+                 hideInfoBox(); // Esconde info box ao mudar zoom pelo input
+             });
+
+            // Listener de Zoom (roda do mouse) no Canvas
+            canvas.addEventListener('wheel', handleWheelZoom);
+            // Listener para Pan com Teclado (no documento todo)
+            document.addEventListener('keydown', handleKeyboardPan);
+
+            // Listener para fechar Info Box
+            infoBoxCloseButton.addEventListener('click', hideInfoBox);
+            // Listener de Clique no Canvas (para abrir Info Box)
+            canvas.addEventListener('click', handleCanvasClick);
+
+            // Listeners de Mouse para Pan e Tooltip
+            document.addEventListener('mousemove', (event) => {
+                 // Atualiza posição global do mouse
+                 globalMouseX = event.clientX; globalMouseY = event.clientY;
+                 // Calcula posição relativa ao canvas
+                 const rect = canvas.getBoundingClientRect();
+                 mouseX = event.clientX - rect.left; mouseY = event.clientY - rect.top;
+
+                 // Se está arrastando (pan)
+                 if (isPanning) {
+                     const dx = event.clientX - panStartX; // Delta X desde o início do pan
+                     const dy = event.clientY - panStartY; // Delta Y desde o início do pan
+                     let newOffsetX = startViewOffsetX + dx; // Calcula novo offset X
+                     let newOffsetY = startViewOffsetY + dy; // Calcula novo offset Y
+
+                     // Calcula e aplica limites de pan (igual ao zoom/teclado)
+                     const orbitMultiplier = useProportionalDiameter ? ORBIT_SPACING_MULTIPLIER : 1;
+                     const neptuneOrbitRadius = celestialBodies.find(p=>p.name === "Netuno").orbitRadius;
+                     const maxRadiusPixels = neptuneOrbitRadius * orbitMultiplier * (baseSize / 2);
+                     // Ajuste no cálculo do maxOffset para pan:
+                     const maxOffset = Math.max(0, maxRadiusPixels * zoomLevel - (baseSize / 2));
+
+                     // Limita o offset
+                     viewOffsetX = Math.max(-maxOffset, Math.min(maxOffset, newOffsetX));
+                     viewOffsetY = Math.max(-maxOffset, Math.min(maxOffset, newOffsetY));
+
+                     // Redesenha se a animação estiver pausada
+                     if (!isAnimationRunning) { drawScene(); }
+                 } else {
+                     // Se não está arrastando, atualiza o tooltip
+                      updateTooltip();
+                 }
+            });
+            canvas.addEventListener('mousedown', onMouseDownCanvas); // Início do Pan
+            document.addEventListener('mouseup', onMouseUpCanvas); // Fim do Pan (no documento todo, caso solte fora)
+            canvas.addEventListener('mouseleave', onMouseLeaveCanvas); // Mouse saiu do canvas
+            // Atualiza posição relativa quando mouse entra no canvas
+            canvas.addEventListener('mouseenter', (event) => {
+                const rect = canvas.getBoundingClientRect();
+                mouseX = event.clientX - rect.left;
+                mouseY = event.clientY - rect.top;
+                globalMouseX = event.clientX; // Atualiza global também
+                globalMouseY = event.clientY;
+            });
+
+            // --- Configuração Inicial e Início ---
+            setupCanvasAndParams(); // Configura tamanho inicial, gera estrelas/asteroides
+            updateCanvasCursor(); // Define o cursor inicial correto
+            window.addEventListener('resize', setupCanvasAndParams); // Reconfigura ao redimensionar janela
+            startAnimation(); // Inicia a animação
+        };
+
+    </script>
+
+</body>
+</html>

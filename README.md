@@ -107,12 +107,4 @@ Relevância Social
 
 Democratização do acesso a laboratórios interativos de ciências de forma gratuita e offline
 
-6. Autoria e Licença
-Este produto didático está sob proteção de direitos autorais, porém, seu uso é livre neste momento por meio do site oficial:
 
-👉 Acessar o Simulador Online
-https://sites.google.com/view/drrodrigopacheco/geografia/simulador-do-sistema-solar?authuser=0
-
-Este produto didático está sob proteção de direitos autorais, porém, seu uso é livre neste momento por meio do site oficial:
-
-👉 Acessar o Simulador Online
